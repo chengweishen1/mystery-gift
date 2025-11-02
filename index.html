@@ -15,8 +15,8 @@
       --fg:#111; --muted:#565; --primary:#6b8afd;
 
       /* 统一尺寸（适配屏幕，保持同规模） */
-      --bubble-w: clamp(240px, 82vw, 360px);
-      --bubble-min-h: clamp(84px, 18vw, 120px);
+      --bubble-w: clamp(200px, 70vw, 300px);
+      --bubble-min-h: clamp(72px, 16vw, 108px);
       --header-h: 44px;
       --radius: 16px;
     }
@@ -51,7 +51,7 @@
     .bubble .icon{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; font-size:18px; line-height:1; }
     .bubble .title{ font-size:14px; font-weight:700; color:#2a2a2a }
     .bubble .body{ flex:1; display:flex; align-items:center; justify-content:center; padding:12px 14px; text-align:center; }
-    .bubble .txt{ font-size: clamp(16px, 4.2vw, 20px); font-weight:700; line-height:1.35; text-shadow: 0 1px 0 rgba(255,255,255,.6); word-break: break-word; }
+    .bubble .txt{ font-size: clamp(14px, 3.2vw, 18px); font-weight:700; line-height:1.35; text-shadow: 0 1px 0 rgba(255,255,255,.6); word-break: break-word; }
 
     @keyframes pop-bounce{ 
       0%   { opacity:0; transform: translate(-50%, -50%) scale(.88); filter:blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,.12) }
@@ -84,6 +84,14 @@
     let TICK_MS  = 350;   // 生成间隔（毫秒）
     let PER_TICK = 2;     // 每次生成多少个弹窗
     const KEEP_ALL = true; // 全部保留（不会移除）
+
+    // ===== BGM 配置（任选其一：外链/本地dataURL/不填）=====
+    // 1) 外链：例如 const AUDIO_SRC = "./assets/bgm.mp3";
+    // 2) dataURL：把整首歌转成 data:audio/mp3;base64,... 贴到这里
+    // 3) 留空：不播放
+    const AUDIO_SRC = "https://music.163.com/song?id=1413585838&uct2=U2FsdGVkX18HIjboiilTtfd+FuH1jSj+Op3WZuyrRcQ="; // 👉 你的 BGM 链接（若无法直链播放，建议换成可直链的 mp3/m4a）
+    const AUDIO_START_AT = 97; // 秒，从 1:37 开始
+    let audioEl = null;
 
     // ===== 祝福文案（第 1 条“生日快乐”） =====
     const blessings = [
@@ -128,19 +136,45 @@
 
     // ===== HUD & 启动 =====
     const hud = document.getElementById('hud');
-    const progressEl = document.getElementById('progress');
+    const progressEl = document.getElementById('progress'); // 计数
+    // 按需隐藏计数
+    if (progressEl) progressEl.style.display = 'none';
     const rateEl = document.getElementById('rate');
     const pauseBtn = document.getElementById('pause');
     const start = document.getElementById('start');
     const startBtn = document.getElementById('startBtn');
 
-    let timer = null, idx = 0, z = 1000, playing = true, spawned = 0;
+    let timer = null, idx = 0, z = 1000, playing = true, spawned = 0, finished = false;
 
     startBtn.addEventListener('click', ()=>{
       start.style.display = 'none';
       hud.style.display = 'flex';
-      idx = 0; spawned = 0; z = 1000; playing = true;
+      idx = 0; spawned = 0; z = 1000; playing = true; finished = false;
       updateHud();
+      // 准备并播放 BGM（需要用户手势，iOS 才能自动播）
+      if (AUDIO_SRC){
+        if (!audioEl){
+          audioEl = new Audio(AUDIO_SRC);
+          audioEl.loop = true; audioEl.preload = 'auto';
+        }
+        const seek = ()=>{
+          try{
+            if (audioEl.readyState > 0){
+              audioEl.currentTime = AUDIO_START_AT || 0;
+              audioEl.play().catch(()=>{});
+              audioEl.removeEventListener('loadedmetadata', seek);
+              audioEl.removeEventListener('canplay', seek);
+            }
+          }catch(e){}
+        };
+        audioEl.addEventListener('loadedmetadata', seek);
+        audioEl.addEventListener('canplay', seek);
+        audioEl.play().then(()=>{
+          if ((AUDIO_START_AT||0) && audioEl.currentTime < (AUDIO_START_AT-0.5)){
+            audioEl.currentTime = AUDIO_START_AT;
+          }
+        }).catch(()=>{});
+      }
       burst();
       startTimer();
     });
@@ -154,8 +188,19 @@
     function stopTimer(){ if (timer){ clearInterval(timer); timer = null; } }
 
     function burst(){
-      // 直到最后一个祝福语，播放完即停止
+      if (finished) return;
+      // 直到最后一个祝福语，播放完即停止，并显示大结尾卡片
       if (idx >= blessings.length){ finish(); return; }
+      const remaining = blessings.length - idx;
+      const n = Math.min(PER_TICK, remaining);
+      for (let k=0; k<n; k++){
+        const text = blessings[idx];
+        spawnBubble(text, spawned);
+        idx++; spawned++;
+      }
+      updateHud();
+      if (idx >= blessings.length){ finish(); }
+    }
       const remaining = blessings.length - idx;
       const n = Math.min(PER_TICK, remaining);
       for (let k=0; k<n; k++){
@@ -168,19 +213,12 @@
     }
 
     function finish(){
+      if (finished) return; finished = true;
       stopTimer();
       pauseBtn.disabled = true; rateEl.textContent = '已完成';
-      // 简易完成提示
-      const done = document.createElement('div');
-      done.className = 'chip';
-      done.textContent = '🎉 所有祝福已送达';
-      done.style.position = 'fixed';
-      done.style.left = '50%';
-      done.style.bottom = '14px';
-      done.style.transform = 'translateX(-50%)';
-      done.style.zIndex = '3200';
-      document.body.appendChild(done);
-      setTimeout(()=>{ done.style.transition='opacity .4s'; done.style.opacity='0'; }, 1600);
+      // 中心大结尾弹窗
+      showFinalCard();
+    }, 1600);
       setTimeout(()=>{ done.remove(); }, 2000);
     }
 
@@ -199,25 +237,21 @@
     }
     function rand(min, max){ return Math.random()*(max-min)+min; }
 
-    function spawnBubble(text, i){ /* enhanced pop-in */
+    function spawnBubble(text, i){ /* enhanced pop-in & safe placement */
       const wrap = document.createElement('div');
       wrap.className = 'bubble';
       wrap.style.zIndex = (z + i).toString();
 
-      // 统一尺寸 & 背景（浅色或浅色渐变）
+      // 统一浅色背景
       const c1 = pastel(); const c2 = pastel();
       wrap.style.background = Math.random() < 0.55 ? c1 : `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
 
-      // 随机位置（以中心定位，留边距避免出界）
-      const left = rand(8, 92); // vw
-      const top  = rand(10, 90); // vh
-      wrap.style.left = left + 'vw';
-      wrap.style.top  = top  + 'vh';
+      // 先放到屏幕外以便测量尺寸
+      wrap.style.left = '-9999px'; wrap.style.top = '-9999px';
 
       // 头部：爱心图标 + 标题“提示”
-      const header = document.createElement('div');
-      header.className = 'header';
-      const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = pickIcon(); // 🖤✨
+      const header = document.createElement('div'); header.className = 'header';
+      const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = pickIcon();
       const title = document.createElement('div'); title.className = 'title'; title.textContent = '提示';
       header.appendChild(icon); header.appendChild(title);
 
@@ -228,8 +262,76 @@
 
       wrap.appendChild(header); wrap.appendChild(body);
       document.body.appendChild(wrap);
+
+      // —— 确保不会超出屏幕：基于实际像素计算中心点范围 ——
+      const pad = 8; // 边距
+      const w = wrap.offsetWidth; const h = wrap.offsetHeight;
+      const ww = window.innerWidth; const wh = window.innerHeight;
+      const minX = pad + w/2, maxX = ww - pad - w/2;
+      const minY = pad + h/2 + 40, maxY = wh - pad - h/2; // 顶部给 HUD 留空间
+      const x = Math.random()*(maxX - minX) + minX;
+      const y = Math.random()*(maxY - minY) + minY;
+      wrap.style.left = x + 'px';
+      wrap.style.top  = y + 'px';
+    }
       // end pop-in setup
     }
+  // —— 结尾大卡片 ——
+    function showFinalCard(){
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble';
+      wrap.style.zIndex = (99999).toString();
+      wrap.style.width = 'min(520px, 86vw)';
+      wrap.style.minHeight = 'min(260px, 48vh)';
+      wrap.style.left = (window.innerWidth/2) + 'px';
+      wrap.style.top  = (window.innerHeight/2) + 'px';
+      wrap.style.background = 'linear-gradient(135deg, hsl(340 90% 92%), hsl(330 95% 97%))';
+
+      const header = document.createElement('div'); header.className = 'header';
+      const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = '💖';
+      const title = document.createElement('div'); title.className = 'title'; title.textContent = '终极祝福';
+      header.appendChild(icon); header.appendChild(title);
+
+      const body = document.createElement('div'); body.className = 'body';
+      const t = document.createElement('div'); t.className = 'txt';
+      t.style.fontSize = 'clamp(18px, 5.2vw, 26px)';
+      t.innerHTML = '生日快乐 夏英琪<br/>给最勇敢的小妖精';
+      body.appendChild(t);
+
+      wrap.appendChild(header); wrap.appendChild(body);
+      document.body.appendChild(wrap);
+    }
+  // === 防御性补丁：确保“打开礼物”总能启动 ===
+    (function(){
+      const btn = document.getElementById('startBtn');
+      if(!btn) return;
+      let __started = false;
+      function safeStart(){
+        if(__started) return; __started = true;
+        try{ start.style.display = 'none'; hud.style.display = 'flex'; }catch(e){}
+        try{ idx = 0; spawned = 0; z = 1000; playing = true; finished = false; updateHud(); }catch(e){}
+        try{ burst(); startTimer(); }catch(e){}
+        // 异步启动 BGM：即使失败也不影响
+        if (AUDIO_SRC){
+          try{
+            if (!audioEl){ audioEl = new Audio(AUDIO_SRC); audioEl.loop = true; audioEl.preload = 'auto'; }
+            const seek = ()=>{ try{ if (audioEl.readyState>0){ audioEl.currentTime = AUDIO_START_AT||0; audioEl.play().catch(()=>{}); audioEl.removeEventListener('loadedmetadata', seek); audioEl.removeEventListener('canplay', seek);} }catch(e){} };
+            audioEl.addEventListener('loadedmetadata', seek);
+            audioEl.addEventListener('canplay', seek);
+            audioEl.play().then(()=>{ if ((AUDIO_START_AT||0) && audioEl.currentTime < (AUDIO_START_AT-0.5)) audioEl.currentTime = AUDIO_START_AT; }).catch(()=>{});
+          }catch(e){}
+        }
+      }
+      // 追加一次性监听（不依赖原有监听），防止音频异常阻塞
+      btn.addEventListener('click', safeStart, { once:true });
+    })();
+  // 额外兜底启动（防止任何原因导致按钮监听失效）
+    (function(){
+      let started = false;
+      function tryStart(){ if (started) return; started = true; const btn = document.getElementById('startBtn'); if (btn) btn.click(); }
+      document.addEventListener('touchstart', tryStart, { once:true, passive:true });
+      document.addEventListener('click', tryStart, { once:true });
+    })();
   </script>
 </body>
 </html>
