@@ -34,13 +34,9 @@
     .chip{background:rgba(255,255,255,.9); backdrop-filter:saturate(140%) blur(6px); border:1px solid rgba(0,0,0,.06); color:#111; padding:6px 10px; border-radius:999px; font-size:12px; box-shadow: var(--shadow)}
     .btn{appearance:none; border:none; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600; background:#2d3a6a; color:#fff; box-shadow:var(--shadow)}
 
-    /* 居中启动卡片 */
+    /* 居中启动弹窗 */
     .center-card{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:2000;}
     .card{width:min(92vw,560px); background:rgba(255,255,255,.92); backdrop-filter:saturate(140%) blur(8px); border-radius:18px; box-shadow:var(--shadow); padding:20px; text-align:center}
-    .card .gift{font-size:56px}
-    .card h1{margin:10px 0 6px; font-size:22px}
-    .card p{margin:0; color:#444}
-    .card .btn{margin-top:14px}
 
     /* 统一尺寸小弹窗（不会消失） */
     .bubble{
@@ -48,9 +44,17 @@
       width:var(--bubble-w); min-height:var(--bubble-min-h);
       border-radius:var(--radius); box-shadow:var(--shadow); color:#111;
       overflow:hidden; pointer-events:none;
-      transform: translate(-50%, -50%);
+
+      /* 关键：GPU 加速 + 更轻动画 */
+      transform: translate3d(-50%, -50%, 0) scale(.9);
       will-change: transform, opacity;
-      animation: pop-bounce .42s cubic-bezier(.16,.9,.2,1) both;
+      backface-visibility: hidden;
+      contain: layout style;
+
+      /* 更柔和的弹出曲线与时长 */
+      --pop-dur: 460ms;
+      --pop-ease: cubic-bezier(.22,1,.36,1);
+      animation: pop-spring var(--pop-dur) var(--pop-ease) both;
     }
     .bubble .header{ height:var(--header-h); display:flex; align-items:center; gap:8px; padding:0 12px; background:rgba(255,255,255,.85); backdrop-filter:saturate(140%) blur(6px); border-bottom:1px solid rgba(0,0,0,.06) }
     .bubble .icon{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; font-size:18px; line-height:1; }
@@ -58,30 +62,28 @@
     .bubble .body{ flex:1; display:flex; align-items:center; justify-content:center; padding:12px 14px; text-align:center; }
     .bubble .txt{ font-size: clamp(14px, 3.2vw, 18px); font-weight:700; line-height:1.35; text-shadow: 0 1px 0 rgba(255,255,255,.6); word-break: break-word; }
 
-    @keyframes pop-bounce{
-      0%   { opacity:0; transform: translate(-50%, -50%) scale(.88); filter:blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,.12) }
-      55%  { opacity:1; transform: translate(-50%, -50%) scale(1.06); filter:blur(0); box-shadow: 0 14px 28px rgba(0,0,0,.18) }
-      75%  { transform: translate(-50%, -50%) scale(.98) }
-      100% { transform: translate(-50%, -50%) scale(1) }
+    @keyframes pop-spring{
+      0%   { opacity:0; transform:translate3d(-50%,-50%,0) scale(.90); }
+      60%  { opacity:1; transform:translate3d(-50%,-50%,0) scale(1.04); }
+      85%  { transform:translate3d(-50%,-50%,0) scale(.985); }
+      100% { transform:translate3d(-50%,-50%,0) scale(1); }
     }
 
-    #fx {
-      position: fixed;
-      inset: 0;
-      z-index: 12000;      /* 在所有弹窗之上 */
-      pointer-events: none; /* 不挡点击 */
+    /* 关怀低动效用户 */
+    @media (prefers-reduced-motion: reduce){
+      .bubble{ animation:none !important; transform:translate(-50%,-50%) }
     }
   </style>
 </head>
 <body>
-  <!-- 顶部 HUD -->
+  <!-- 顶部 HUD（计数/速率已隐藏，仅保留“暂停/继续”） -->
   <div class="hud" id="hud" style="display:none;">
-    <div class="chip" id="progress" style="display:none;">0 / 100</div> <!-- 计数已隐藏 -->
+    <div class="chip" id="progress" style="display:none;">0 / 100</div>
     <div class="chip" id="rate" style="display:none;">速率：≈6/秒</div>
     <button class="btn" id="pause">⏸ 暂停</button>
   </div>
 
-  <!-- 居中启动卡片 -->
+  <!-- 居中启动弹窗 -->
   <div class="center-card" id="start">
     <div class="card" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
       <div class="dlg-header" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
@@ -101,10 +103,7 @@
     let PER_TICK = 2;     // 每次生成多少个弹窗
     const KEEP_ALL = true; // 全部保留（不会移除）
 
-    // ===== BGM：填成你本地同目录/或线上直链 =====
-    // 例：本地同目录： "./bgm.mp3"
-    //    子目录：      "./assets/bgm.mp3"
-    //    内嵌：        "data:audio/mpeg;base64,......"
+    // ===== BGM（可替换成你的直链/路径）=====
     const AUDIO_SRC = "./obj_wo3DlMOGwrbDjj7DisKw_14096426128_d7a9_d197_ef6c_493b534113158f59be669bad52104ca6.mp3";
     const AUDIO_START_AT = 97;  // 1:37
     let audioEl = null;
@@ -135,7 +134,7 @@
     ];
     while (blessings.length < 100) blessings.push(`愿你喜乐常伴（第${blessings.length+1}条）`);
 
-    // ===== 标题图标（仅使用你挑选的几种） =====
+    // ===== 标题图标（仅使用挑选的几种） =====
     const ICON_SETS = [
       [0x1F496],        // 💖
       [0x1F497],        // 💗
@@ -157,7 +156,7 @@
     const start = document.getElementById('start');
     const startBtn = document.getElementById('startBtn');
 
-    let timer = null, idx = 0, z = 1000, playing = true, spawned = 0, finished = false;
+    let idx = 0, z = 1000, playing = true, spawned = 0, finished = false;
 
     startBtn.addEventListener('click', ()=>{
       start.style.display = 'none';
@@ -197,12 +196,33 @@
     });
 
     pauseBtn.addEventListener('click', ()=>{
-      if (playing){ stopTimer(); pauseBtn.textContent = '▶ 继续'; } else { startTimer(); pauseBtn.textContent = '⏸ 暂停'; }
+      if (playing){ stopTimer(); pauseBtn.textContent = '▶ 继续'; }
+      else        { startTimer(); pauseBtn.textContent = '⏸ 暂停'; }
       playing = !playing;
     });
 
-    function startTimer(){ stopTimer(); timer = setInterval(burst, TICK_MS); }
-    function stopTimer(){ if (timer){ clearInterval(timer); timer = null; } }
+    // ===== rAF 调度：更顺滑的生成节奏 =====
+    let rafIdGen = 0, acc = 0;
+    function startTimer(){
+      stopTimer();
+      let last = performance.now();
+      function tick(now){
+        rafIdGen = requestAnimationFrame(tick);
+        const dt = now - last; last = now;
+        acc += dt;
+
+        while (acc >= TICK_MS){
+          acc -= TICK_MS;
+          burst();
+          if (finished){ stopTimer(); break; }
+        }
+      }
+      rafIdGen = requestAnimationFrame(tick);
+    }
+    function stopTimer(){
+      if (rafIdGen){ cancelAnimationFrame(rafIdGen); rafIdGen = 0; }
+      acc = 0;
+    }
 
     function burst(){
       if (finished) return;
@@ -223,6 +243,7 @@
       stopTimer();
       pauseBtn.disabled = true; rateEl.textContent = '已完成';
       showFinalCard();
+      launchFireworks(20); // 播放 20 秒烟花（可改）
     }
 
     function updateHud(){
@@ -273,7 +294,7 @@
       wrap.style.top  = y + 'px';
     }
 
-    // —— 结尾大卡片 —— 
+    // —— 结尾大卡片（2 秒一条，渐隐渐现）——
     function showFinalCard(){
       const finalMsgs = [
         '生日快乐 夏英琪<br/>给最勇敢的小妖精',
@@ -337,49 +358,48 @@
       setTimeout(showNext, SHOW_MS);
     }
 
-    function finish(){
-      if (finished) return; finished = true;
-      stopTimer();
-      pauseBtn.disabled = true; rateEl.textContent = '已完成';
-      showFinalCard();
-      launchFireworks(20); // ⬅️ 播放 10 秒烟花
-    }
-
-    // --- 庆祝烟花：durationSec 秒后自动停止 ---
+    // --- 庆祝烟花（小而精，自适应屏幕，播完即移除） ---
     function launchFireworks(durationSec = 10){
-      // 动态创建独立画布，用完就删
+      // 动态创建画布（用完就删）
       const c = document.createElement('canvas');
       c.style.cssText = 'position:fixed;inset:0;z-index:12000;pointer-events:none';
       document.body.appendChild(c);
 
       const ctx = c.getContext('2d');
       let W, H, DPR = Math.max(1, window.devicePixelRatio || 1);
+
+      // 基于屏幕较短边计算缩放因子，手机会稍小
+      let baseScale = 1;
       function resize(){
         W = c.clientWidth = window.innerWidth;
         H = c.clientHeight = window.innerHeight;
         c.width  = W * DPR; c.height = H * DPR;
         ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+        // 以 430px 作为基准短边
+        const shortSide = Math.min(W, H);
+        baseScale = Math.min(1, Math.max(0.6, shortSide / 430)); // 0.6 ~ 1
       }
       resize();
       window.addEventListener('resize', resize);
 
-      const gravity = 0.06;
-      const friction = 0.985;
+      const gravity  = 0.05 * baseScale;
+      const friction = 0.988;
       const particles = [];
       let running = true, rafId = 0;
 
       function burst(x, y, colors){
-        const n = 48 + Math.floor(Math.random()*16);
+        const n = Math.round((28 + Math.random()*10) * baseScale); // ~28-38 * scale
         for(let i=0;i<n;i++){
-          const a = Math.random()*Math.PI*2;
-          const sp = 2 + Math.random()*3.5;
+          const a  = Math.random()*Math.PI*2;
+          const sp = (1.6 + Math.random()*2.6) * baseScale;
           particles.push({
             x, y,
             vx: Math.cos(a)*sp,
             vy: Math.sin(a)*sp,
             life: 1,
             color: colors[Math.floor(Math.random()*colors.length)],
-            size: 1 + Math.random()*2
+            size: (0.8 + Math.random()*1.6) * baseScale
           });
         }
       }
@@ -390,23 +410,25 @@
         ['#ffd27a','#ff9a7a','#ffe07a','#ffffff']
       ];
 
+      const EDGE = 0.10; // 留 10% 边距
       let lastSpawn = 0;
+
       function loop(t){
         if (!running) return;
         rafId = requestAnimationFrame(loop);
 
-        // 用 destination-out 擦出拖影（不会真正上黑）
+        // 柔和拖影
         ctx.globalCompositeOperation = 'destination-out';
-        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillStyle = 'rgba(0,0,0,0.22)';
         ctx.fillRect(0,0,W,H);
 
         ctx.globalCompositeOperation = 'lighter';
 
-        // 周期性爆炸
-        if (!lastSpawn || t - lastSpawn > 400){
+        // 触发频率略降，移动端更稳
+        if (!lastSpawn || t - lastSpawn > (440 + Math.random()*160)){
           lastSpawn = t;
-          const px = 0.15*W + Math.random()*0.7*W;
-          const py = 0.15*H + Math.random()*0.55*H;
+          const px = (EDGE*W) + Math.random() * ((1-EDGE*2)*W);
+          const py = (EDGE*H) + Math.random() * ((1-EDGE*2)*H);
           burst(px, py, palettes[Math.floor(Math.random()*palettes.length)]);
         }
 
@@ -414,9 +436,9 @@
           const p = particles[i];
           p.vx *= friction; p.vy = p.vy*friction + gravity;
           p.x += p.vx; p.y += p.vy;
-          p.life -= 0.012 + Math.random()*0.01;
+          p.life -= (0.012 + Math.random()*0.009);
 
-          if (p.life <= 0 || p.y > H+20){ particles.splice(i,1); continue; }
+          if (p.life <= 0 || p.y > H+24){ particles.splice(i,1); continue; }
           ctx.globalAlpha = Math.max(0, p.life);
           ctx.fillStyle = p.color;
           ctx.beginPath();
@@ -427,15 +449,14 @@
       }
       rafId = requestAnimationFrame(loop);
 
-      // 到时停止并彻底清理
+      // 到时停止并彻底清理（不影响背景）
       setTimeout(()=>{
         running = false;
         cancelAnimationFrame(rafId);
         window.removeEventListener('resize', resize);
-        // 复位合成模式，清空画布，然后从 DOM 移除
         ctx.globalCompositeOperation = 'source-over';
         ctx.clearRect(0,0,W,H);
-        c.remove();  // 🔥 关键：删除画布 → 背景不受影响
+        c.remove();
       }, durationSec * 1000);
     }
 
@@ -452,7 +473,5 @@
       document.addEventListener('click', safeStart, { once:true });
     })();
   </script>
-  <canvas id="fx"></canvas>
-
 </body>
 </html>
