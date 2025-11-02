@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>神秘礼物 · 背景图 + 统一尺寸弹窗</title>
+  <style>
+    :root{
+      /* 在这里把图换成你的：把 heart.png 放到和本文件同一目录，或使用 data:URL */
+      /* 使用系统原生 Emoji，不依赖外部图片 */
+      --emoji: '🖤✨';   /* 背景图（可换） */
+
+      --overlay: linear-gradient(135deg, rgba(255,255,255,.35), rgba(255,255,255,.15));
+      --shadow: 0 10px 30px rgba(0,0,0,.18);
+      --fg:#111; --muted:#565; --primary:#6b8afd;
+
+      /* 统一尺寸（适配屏幕，保持同规模） */
+      --bubble-w: clamp(240px, 82vw, 360px);
+      --bubble-min-h: clamp(84px, 18vw, 120px);
+      --header-h: 44px;
+      --radius: 16px;
+    }
+
+    html,body{height:100%}
+    body{
+      margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',Arial,sans-serif;
+      /* 单文件：用柔和渐变代替外部背景图，可按需调整 */
+      background-image: linear-gradient(135deg, #f8fbff 0%, #fff 40%, #f6f7ff 100%);
+      background-size: cover;                 /* 适配各种分辨率 */
+      background-position: center center;
+      background-attachment: fixed;           /* 视觉更稳 */
+      overflow:hidden;                        /* 不出现滚动条 */
+    }
+
+    /* 顶部 HUD（进度/速率/暂停） */
+    .hud{position:fixed; left:50%; top:12px; transform:translateX(-50%); z-index:3000; display:flex; gap:8px; align-items:center}
+    .chip{background:rgba(255,255,255,.9); backdrop-filter:saturate(140%) blur(6px); border:1px solid rgba(0,0,0,.06); color:#111; padding:6px 10px; border-radius:999px; font-size:12px; box-shadow: var(--shadow)}
+    .btn{appearance:none; border:none; border-radius:999px; padding:6px 12px; font-size:12px; font-weight:600; background:#2d3a6a; color:#fff; box-shadow:var(--shadow)}
+
+    /* 居中启动卡片 */
+    .center-card{position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:2000;}
+    .card{width:min(92vw,560px); background:rgba(255,255,255,.92); backdrop-filter:saturate(140%) blur(8px); border-radius:18px; box-shadow:var(--shadow); padding:20px; text-align:center}
+    .card .gift{font-size:56px}
+    .card h1{margin:10px 0 6px; font-size:22px}
+    .card p{margin:0; color:#444}
+    .card .btn{margin-top:14px}
+
+    /* 统一尺寸小弹窗（不会消失） */
+    .bubble{ position:fixed; display:flex; flex-direction:column; width:var(--bubble-w); min-height:var(--bubble-min-h); border-radius:var(--radius); box-shadow:var(--shadow); color:#111; overflow:hidden; pointer-events:none; transform: translate(-50%, -50%); will-change: transform, opacity; animation: pop-bounce .42s cubic-bezier(.16,.9,.2,1) both; } }
+    .bubble .header{ height:var(--header-h); display:flex; align-items:center; gap:8px; padding:0 12px; background:rgba(255,255,255,.85); backdrop-filter:saturate(140%) blur(6px); border-bottom:1px solid rgba(0,0,0,.06) }
+    .bubble .icon{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; font-size:18px; line-height:1; }
+    .bubble .title{ font-size:14px; font-weight:700; color:#2a2a2a }
+    .bubble .body{ flex:1; display:flex; align-items:center; justify-content:center; padding:12px 14px; text-align:center; }
+    .bubble .txt{ font-size: clamp(16px, 4.2vw, 20px); font-weight:700; line-height:1.35; text-shadow: 0 1px 0 rgba(255,255,255,.6); word-break: break-word; }
+
+    @keyframes pop-bounce{ 
+      0%   { opacity:0; transform: translate(-50%, -50%) scale(.88); filter:blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,.12) }
+      55%  { opacity:1; transform: translate(-50%, -50%) scale(1.06); filter:blur(0); box-shadow: 0 14px 28px rgba(0,0,0,.18) }
+      75%  { transform: translate(-50%, -50%) scale(.98) }
+      100% { transform: translate(-50%, -50%) scale(1) }
+    } to{ opacity:1; filter:blur(0) saturate(1);} }
+  </style>
+</head>
+<body>
+  <!-- 顶部 HUD -->
+  <div class="hud" id="hud" style="display:none;">
+    <div class="chip" id="progress">0 / 100</div>
+    <div class="chip" id="rate">速率：≈6/秒</div>
+    <button class="btn" id="pause">⏸ 暂停</button>
+  </div>
+
+  <!-- 居中启动卡片 -->
+  <div class="center-card" id="start">
+    <div class="card">
+      <div class="gift">🎁</div>
+      <h1>神秘礼物 · 背景图 + 统一尺寸弹窗</h1>
+      <p>点击开始：在背景图上以<strong>统一大小</strong>生成祝福弹窗，每个弹窗左上角有你的<strong>爱心图标 + “提示”标题</strong>。新弹窗会覆盖旧弹窗，播到<strong>最后一条即停止</strong>。</p>
+      <button class="btn" id="startBtn">打开礼物</button>
+    </div>
+  </div>
+
+  <script>
+    // ===== 参数 =====
+    let TICK_MS  = 350;   // 生成间隔（毫秒）
+    let PER_TICK = 2;     // 每次生成多少个弹窗
+    const KEEP_ALL = true; // 全部保留（不会移除）
+
+    // ===== 祝福文案（第 1 条“生日快乐”） =====
+    const blessings = [
+      "生日快乐","愿你所求皆如愿，所行化坦途","新的一岁，眼里有光，心中有爱","愿你健康常在，笑容常开","前程似锦，万事胜意",
+      "祝你学业进步，步步高升","愿你被世界温柔以待","愿你心想事成，一切顺利","岁岁常欢愉，年年皆胜意","愿你所遇皆良善，所见皆美好",
+      "好运伴你左右，平安喜乐常在","事业蒸蒸日上，生活红红火火","愿你被光照亮，也成为别人的光","前路有风景，身后有支持","鲜花与掌声都向你招手",
+      "所爱如山海，岁月不言败","愿你不负热爱，不负自己","一切美好不期而遇","阳光正好，万物可期","愿你勇敢无畏，温柔坚定",
+      "眉眼带笑，心事皆晴","愿你每天都能睡个好觉","身心自由，灵魂有光","愿你与幸运不期而遇","生活可爱，工作顺心",
+      "愿你拥抱热爱，拥抱世界","进步看得见，幸福摸得着","愿你被时间温柔以待","所愿皆得，所得皆欢","愿你与快乐常在",
+      "不惧将来，不念过往","愿你永远保持热爱与好奇","星河灿烂，前路明朗","愿你好运爆棚，心情爆表","一路生花，满载而归",
+      "愿你与理想不期而遇","心有丘壑，眉目成书","愿你的努力都被看见","心安即是归处，处处皆风景","愿你与温暖撞个满怀",
+      "把平凡日子过成诗","愿你逢考必过，逢战必赢","心态年轻，快乐翻倍","愿你被世界温柔以待（再次应验）","顺风顺水，也能逆风飞翔",
+      "愿你所念皆如愿，所愿皆成真","桃花连连，贵人常伴","愿你财源滚滚，余额常青","身强体健，百毒不侵","愿你不再焦虑，睡醒就有答案",
+      "情绪稳定，事事顺利","愿你被爱包围，也懂得自爱","脚下有路，心中有光","愿你一路披荆斩棘，所向披靡","读书有收获，工作有回报",
+      "愿你常常被小事感动","和自己和解，和世界和好","愿你迎难而上，所遇皆甜","不困于心，不乱于情","愿你与家人平安喜乐",
+      "学会热爱，学会松弛","愿你梦想有翼，现实有依","把日子过甜，把心事放轻","愿你浪漫不灭，理性常在","心怀感恩，所遇皆温柔",
+      "愿你多赚点钱，也多一点闲","和解过去，拥抱明天","愿你高分过线，高薪上岸","所遇皆拐点，拐向更好","愿你健康饮食，快乐运动",
+      "远离内耗，靠近热爱","愿你被幸运盯上，被烦恼放过","常喜常乐，日日自得","愿你被同伴理解，被长辈称赞","工作不加班，睡觉不失眠",
+      "愿你在低谷也不放弃","笑容明媚，心境澄澈","愿你与值得的人并肩","越努力越幸运","愿你四季平安，五福临门",
+      "赴一场热爱，归一身轻松","愿你有趣有盼，不将就","学有所成，行有所止","愿你善良有锋芒","风雨之后见彩虹",
+      "愿你所等皆不负所盼","脚踏实地，仰望星空","愿你手有余香，眼有星光","不为难自己，不讨好他人","愿你与焦虑说再见",
+      "热爱可抵岁月漫长","愿你所做皆所爱","见过山海，仍觉人间值得","愿你春有百花，冬有暖阳","做喜欢的事，和喜欢的人",
+      "愿你被微风轻抚，被好运拥抱","清醒自律，也温柔松弛","愿你开口遇贵人，出门逢喜事","心底从容，步履轻盈","愿你落落大方，闪闪发光",
+      "坚持与幸运撞个满怀","愿你此生尽兴，赤诚善良","不畏将来，不负过往","愿你被热爱治愈，被生活偏爱"
+    ];
+    while (blessings.length < 100) blessings.push(`愿你喜乐常伴（第${blessings.length+1}条）`);
+
+    // ===== 标题图标（仅使用你挑选的几种） =====
+    // 粉亮心 💖, 粉爱心 💗, 丘比特心 💘, 缎带心 💝, 带闪 💖✨, 可爱组合 💖💕
+    const ICON_SETS = [
+      [0x1F496],
+      [0x1F497],
+      [0x1F498],
+      [0x1F49D],
+      [0x1F496, 0x2728],
+      [0x1F496, 0x1F495]
+    ];
+    function pickIcon(){
+      const set = ICON_SETS[Math.floor(Math.random()*ICON_SETS.length)];
+      return String.fromCodePoint(...set);
+    }
+
+    // ===== HUD & 启动 =====
+    const hud = document.getElementById('hud');
+    const progressEl = document.getElementById('progress');
+    const rateEl = document.getElementById('rate');
+    const pauseBtn = document.getElementById('pause');
+    const start = document.getElementById('start');
+    const startBtn = document.getElementById('startBtn');
+
+    let timer = null, idx = 0, z = 1000, playing = true, spawned = 0;
+
+    startBtn.addEventListener('click', ()=>{
+      start.style.display = 'none';
+      hud.style.display = 'flex';
+      idx = 0; spawned = 0; z = 1000; playing = true;
+      updateHud();
+      burst();
+      startTimer();
+    });
+
+    pauseBtn.addEventListener('click', ()=>{
+      if (playing){ stopTimer(); pauseBtn.textContent = '▶ 继续'; } else { startTimer(); pauseBtn.textContent = '⏸ 暂停'; }
+      playing = !playing;
+    });
+
+    function startTimer(){ stopTimer(); timer = setInterval(burst, TICK_MS); }
+    function stopTimer(){ if (timer){ clearInterval(timer); timer = null; } }
+
+    function burst(){
+      // 直到最后一个祝福语，播放完即停止
+      if (idx >= blessings.length){ finish(); return; }
+      const remaining = blessings.length - idx;
+      const n = Math.min(PER_TICK, remaining);
+      for (let k=0; k<n; k++){
+        const text = blessings[idx];
+        spawnBubble(text, spawned);
+        idx++; spawned++;
+      }
+      updateHud();
+      if (idx >= blessings.length){ finish(); }
+    }
+
+    function finish(){
+      stopTimer();
+      pauseBtn.disabled = true; rateEl.textContent = '已完成';
+      // 简易完成提示
+      const done = document.createElement('div');
+      done.className = 'chip';
+      done.textContent = '🎉 所有祝福已送达';
+      done.style.position = 'fixed';
+      done.style.left = '50%';
+      done.style.bottom = '14px';
+      done.style.transform = 'translateX(-50%)';
+      done.style.zIndex = '3200';
+      document.body.appendChild(done);
+      setTimeout(()=>{ done.style.transition='opacity .4s'; done.style.opacity='0'; }, 1600);
+      setTimeout(()=>{ done.remove(); }, 2000);
+    }
+
+    function updateHud(){
+      progressEl.textContent = `${Math.min(idx, blessings.length)} / ${blessings.length}`;
+      const perSec = Math.round(1000 / TICK_MS * PER_TICK);
+      rateEl.textContent = `速率：≈${perSec}/秒`;
+    }
+
+    // ===== 工具：随机浅色、随机位置 =====
+    function pastel(){
+      const h = Math.floor(Math.random()*360);
+      const s = 55 + Math.random()*18;  // 55-73% 适中饱和
+      const l = 86 + Math.random()*10;  // 86-96% 偏浅
+      return `hsl(${h} ${s}% ${l}%)`;
+    }
+    function rand(min, max){ return Math.random()*(max-min)+min; }
+
+    function spawnBubble(text, i){ /* enhanced pop-in */
+      const wrap = document.createElement('div');
+      wrap.className = 'bubble';
+      wrap.style.zIndex = (z + i).toString();
+
+      // 统一尺寸 & 背景（浅色或浅色渐变）
+      const c1 = pastel(); const c2 = pastel();
+      wrap.style.background = Math.random() < 0.55 ? c1 : `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
+
+      // 随机位置（以中心定位，留边距避免出界）
+      const left = rand(8, 92); // vw
+      const top  = rand(10, 90); // vh
+      wrap.style.left = left + 'vw';
+      wrap.style.top  = top  + 'vh';
+
+      // 头部：爱心图标 + 标题“提示”
+      const header = document.createElement('div');
+      header.className = 'header';
+      const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = pickIcon(); // 🖤✨
+      const title = document.createElement('div'); title.className = 'title'; title.textContent = '提示';
+      header.appendChild(icon); header.appendChild(title);
+
+      // 正文：祝福语
+      const body = document.createElement('div'); body.className = 'body';
+      const t = document.createElement('div'); t.className = 'txt'; t.textContent = text;
+      body.appendChild(t);
+
+      wrap.appendChild(header); wrap.appendChild(body);
+      document.body.appendChild(wrap);
+      // end pop-in setup
+    }
+  </script>
+</body>
+</html>
