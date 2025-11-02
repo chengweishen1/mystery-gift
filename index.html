@@ -243,7 +243,7 @@
       stopTimer();
       pauseBtn.disabled = true; rateEl.textContent = '已完成';
       showFinalCard();
-      launchFireworks(20); // 播放 20 秒烟花（可改）
+      launchFireworks(50); // 播放 50 秒烟花（可改）
     }
 
     function updateHud(){
@@ -325,7 +325,7 @@
       // 头部
       const header = document.createElement('div'); header.className = 'header';
       const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = '💖';
-      const title = document.createElement('div'); title.className = 'title'; title.textContent = '终极祝福';
+      const title = document.createElement('div'); title.className = 'title'; title.textContent = '接祝福！！';
       header.appendChild(icon); header.appendChild(title);
 
       // 正文
@@ -479,3 +479,4 @@
   </script>
 </body>
 </html>
+
