@@ -3,18 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <title>神秘礼物 · 背景图 + 统一尺寸弹窗</title>
+  <title>神秘礼物</title>
   <style>
     :root{
-      /* 在这里把图换成你的：把 heart.png 放到和本文件同一目录，或使用 data:URL */
-      /* 使用系统原生 Emoji，不依赖外部图片 */
-      --emoji: '🖤✨';   /* 背景图（可换） */
-
+      --emoji: '🖤✨';
       --overlay: linear-gradient(135deg, rgba(255,255,255,.35), rgba(255,255,255,.15));
       --shadow: 0 10px 30px rgba(0,0,0,.18);
       --fg:#111; --muted:#565; --primary:#6b8afd;
 
-      /* 统一尺寸（适配屏幕，保持同规模） */
+      /* 统一尺寸（更小，适配竖屏） */
       --bubble-w: clamp(200px, 70vw, 300px);
       --bubble-min-h: clamp(72px, 16vw, 108px);
       --header-h: 44px;
@@ -23,13 +20,13 @@
 
     html,body{height:100%}
     body{
-      margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',Arial,sans-serif;
-      /* 单文件：用柔和渐变代替外部背景图，可按需调整 */
+      margin:0;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',Arial,sans-serif;
       background-image: linear-gradient(135deg, #f8fbff 0%, #fff 40%, #f6f7ff 100%);
-      background-size: cover;                 /* 适配各种分辨率 */
+      background-size: cover;
       background-position: center center;
-      background-attachment: fixed;           /* 视觉更稳 */
-      overflow:hidden;                        /* 不出现滚动条 */
+      background-attachment: fixed;
+      overflow:hidden;
     }
 
     /* 顶部 HUD（进度/速率/暂停） */
@@ -46,36 +43,55 @@
     .card .btn{margin-top:14px}
 
     /* 统一尺寸小弹窗（不会消失） */
-    .bubble{ position:fixed; display:flex; flex-direction:column; width:var(--bubble-w); min-height:var(--bubble-min-h); border-radius:var(--radius); box-shadow:var(--shadow); color:#111; overflow:hidden; pointer-events:none; transform: translate(-50%, -50%); will-change: transform, opacity; animation: pop-bounce .42s cubic-bezier(.16,.9,.2,1) both; } }
+    .bubble{
+      position:fixed; display:flex; flex-direction:column;
+      width:var(--bubble-w); min-height:var(--bubble-min-h);
+      border-radius:var(--radius); box-shadow:var(--shadow); color:#111;
+      overflow:hidden; pointer-events:none;
+      transform: translate(-50%, -50%);
+      will-change: transform, opacity;
+      animation: pop-bounce .42s cubic-bezier(.16,.9,.2,1) both;
+    }
     .bubble .header{ height:var(--header-h); display:flex; align-items:center; gap:8px; padding:0 12px; background:rgba(255,255,255,.85); backdrop-filter:saturate(140%) blur(6px); border-bottom:1px solid rgba(0,0,0,.06) }
     .bubble .icon{ display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; border-radius:6px; font-size:18px; line-height:1; }
     .bubble .title{ font-size:14px; font-weight:700; color:#2a2a2a }
     .bubble .body{ flex:1; display:flex; align-items:center; justify-content:center; padding:12px 14px; text-align:center; }
     .bubble .txt{ font-size: clamp(14px, 3.2vw, 18px); font-weight:700; line-height:1.35; text-shadow: 0 1px 0 rgba(255,255,255,.6); word-break: break-word; }
 
-    @keyframes pop-bounce{ 
+    @keyframes pop-bounce{
       0%   { opacity:0; transform: translate(-50%, -50%) scale(.88); filter:blur(2px); box-shadow: 0 2px 6px rgba(0,0,0,.12) }
       55%  { opacity:1; transform: translate(-50%, -50%) scale(1.06); filter:blur(0); box-shadow: 0 14px 28px rgba(0,0,0,.18) }
       75%  { transform: translate(-50%, -50%) scale(.98) }
       100% { transform: translate(-50%, -50%) scale(1) }
-    } to{ opacity:1; filter:blur(0) saturate(1);} }
+    }
+
+    #fx {
+      position: fixed;
+      inset: 0;
+      z-index: 12000;      /* 在所有弹窗之上 */
+      pointer-events: none; /* 不挡点击 */
+    }
   </style>
 </head>
 <body>
   <!-- 顶部 HUD -->
   <div class="hud" id="hud" style="display:none;">
-    <div class="chip" id="progress">0 / 100</div>
-    <div class="chip" id="rate">速率：≈6/秒</div>
+    <div class="chip" id="progress" style="display:none;">0 / 100</div> <!-- 计数已隐藏 -->
+    <div class="chip" id="rate" style="display:none;">速率：≈6/秒</div>
     <button class="btn" id="pause">⏸ 暂停</button>
   </div>
 
   <!-- 居中启动卡片 -->
   <div class="center-card" id="start">
-    <div class="card">
-      <div class="gift">🎁</div>
-      <h1>神秘礼物 · 背景图 + 统一尺寸弹窗</h1>
-      <p>点击开始：在背景图上以<strong>统一大小</strong>生成祝福弹窗，每个弹窗左上角有你的<strong>爱心图标 + “提示”标题</strong>。新弹窗会覆盖旧弹窗，播到<strong>最后一条即停止</strong>。</p>
-      <button class="btn" id="startBtn">打开礼物</button>
+    <div class="card" role="dialog" aria-modal="true" aria-labelledby="popupTitle">
+      <div class="dlg-header" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span class="icon" aria-hidden="true" style="font-size:22px;">🎁</span>
+        <h1 id="popupTitle" style="margin:0;font-size:20px;">神秘礼物</h1>
+      </div>
+      <p style="margin:4px 0 0;color:#333;font-size:16px;">
+        你有一份神秘礼物待签收，确定要打开吗？
+      </p>
+      <button class="btn" id="startBtn" style="margin-top:16px;">确定</button>
     </div>
   </div>
 
@@ -85,10 +101,10 @@
     let PER_TICK = 2;     // 每次生成多少个弹窗
     const KEEP_ALL = true; // 全部保留（不会移除）
 
-    // ===== BGM 配置（任选其一：外链/本地dataURL/不填）=====
-    // 1) 外链：例如 const AUDIO_SRC = "./assets/bgm.mp3";
-    // 2) dataURL：把整首歌转成 data:audio/mp3;base64,... 贴到这里
-    // 3) 留空：不播放
+    // ===== BGM：填成你本地同目录/或线上直链 =====
+    // 例：本地同目录： "./bgm.mp3"
+    //    子目录：      "./assets/bgm.mp3"
+    //    内嵌：        "data:audio/mpeg;base64,......"
     const AUDIO_SRC = "./obj_wo3DlMOGwrbDjj7DisKw_14096426128_d7a9_d197_ef6c_493b534113158f59be669bad52104ca6.mp3";
     const AUDIO_START_AT = 97;  // 1:37
     let audioEl = null;
@@ -120,14 +136,13 @@
     while (blessings.length < 100) blessings.push(`愿你喜乐常伴（第${blessings.length+1}条）`);
 
     // ===== 标题图标（仅使用你挑选的几种） =====
-    // 粉亮心 💖, 粉爱心 💗, 丘比特心 💘, 缎带心 💝, 带闪 💖✨, 可爱组合 💖💕
     const ICON_SETS = [
-      [0x1F496],
-      [0x1F497],
-      [0x1F498],
-      [0x1F49D],
-      [0x1F496, 0x2728],
-      [0x1F496, 0x1F495]
+      [0x1F496],        // 💖
+      [0x1F497],        // 💗
+      [0x1F498],        // 💘
+      [0x1F49D],        // 💝
+      [0x1F496, 0x2728],// 💖✨
+      [0x1F496, 0x1F495]// 💖💕
     ];
     function pickIcon(){
       const set = ICON_SETS[Math.floor(Math.random()*ICON_SETS.length)];
@@ -136,9 +151,7 @@
 
     // ===== HUD & 启动 =====
     const hud = document.getElementById('hud');
-    const progressEl = document.getElementById('progress'); // 计数
-    // 按需隐藏计数
-    if (progressEl) progressEl.style.display = 'none';
+    const progressEl = document.getElementById('progress');
     const rateEl = document.getElementById('rate');
     const pauseBtn = document.getElementById('pause');
     const start = document.getElementById('start');
@@ -151,30 +164,34 @@
       hud.style.display = 'flex';
       idx = 0; spawned = 0; z = 1000; playing = true; finished = false;
       updateHud();
-      // 准备并播放 BGM（需要用户手势，iOS 才能自动播）
+
+      // BGM（失败也不阻塞）
       if (AUDIO_SRC){
-        if (!audioEl){
-          audioEl = new Audio(AUDIO_SRC);
-          audioEl.loop = true; audioEl.preload = 'auto';
-        }
-        const seek = ()=>{
-          try{
-            if (audioEl.readyState > 0){
-              audioEl.currentTime = AUDIO_START_AT || 0;
-              audioEl.play().catch(()=>{});
-              audioEl.removeEventListener('loadedmetadata', seek);
-              audioEl.removeEventListener('canplay', seek);
-            }
-          }catch(e){}
-        };
-        audioEl.addEventListener('loadedmetadata', seek);
-        audioEl.addEventListener('canplay', seek);
-        audioEl.play().then(()=>{
-          if ((AUDIO_START_AT||0) && audioEl.currentTime < (AUDIO_START_AT-0.5)){
-            audioEl.currentTime = AUDIO_START_AT;
+        try{
+          if (!audioEl){
+            audioEl = new Audio(AUDIO_SRC);
+            audioEl.loop = true; audioEl.preload = 'auto';
           }
-        }).catch(()=>{});
+          const seek = ()=>{
+            try{
+              if (audioEl.readyState > 0){
+                audioEl.currentTime = AUDIO_START_AT || 0;
+                audioEl.play().catch(()=>{});
+                audioEl.removeEventListener('loadedmetadata', seek);
+                audioEl.removeEventListener('canplay', seek);
+              }
+            }catch(e){}
+          };
+          audioEl.addEventListener('loadedmetadata', seek);
+          audioEl.addEventListener('canplay', seek);
+          audioEl.play().then(()=>{
+            if ((AUDIO_START_AT||0) && audioEl.currentTime < (AUDIO_START_AT-0.5)){
+              audioEl.currentTime = AUDIO_START_AT;
+            }
+          }).catch(()=>{});
+        }catch(e){}
       }
+
       burst();
       startTimer();
     });
@@ -189,18 +206,7 @@
 
     function burst(){
       if (finished) return;
-      // 直到最后一个祝福语，播放完即停止，并显示大结尾卡片
       if (idx >= blessings.length){ finish(); return; }
-      const remaining = blessings.length - idx;
-      const n = Math.min(PER_TICK, remaining);
-      for (let k=0; k<n; k++){
-        const text = blessings[idx];
-        spawnBubble(text, spawned);
-        idx++; spawned++;
-      }
-      updateHud();
-      if (idx >= blessings.length){ finish(); }
-    }
       const remaining = blessings.length - idx;
       const n = Math.min(PER_TICK, remaining);
       for (let k=0; k<n; k++){
@@ -216,14 +222,11 @@
       if (finished) return; finished = true;
       stopTimer();
       pauseBtn.disabled = true; rateEl.textContent = '已完成';
-      // 中心大结尾弹窗
       showFinalCard();
-    }, 1600);
-      setTimeout(()=>{ done.remove(); }, 2000);
     }
 
     function updateHud(){
-      progressEl.textContent = `${Math.min(idx, blessings.length)} / ${blessings.length}`;
+      if (progressEl) progressEl.textContent = `${Math.min(idx, blessings.length)} / ${blessings.length}`;
       const perSec = Math.round(1000 / TICK_MS * PER_TICK);
       rateEl.textContent = `速率：≈${perSec}/秒`;
     }
@@ -231,31 +234,26 @@
     // ===== 工具：随机浅色、随机位置 =====
     function pastel(){
       const h = Math.floor(Math.random()*360);
-      const s = 55 + Math.random()*18;  // 55-73% 适中饱和
-      const l = 86 + Math.random()*10;  // 86-96% 偏浅
+      const s = 55 + Math.random()*18;
+      const l = 86 + Math.random()*10;
       return `hsl(${h} ${s}% ${l}%)`;
     }
-    function rand(min, max){ return Math.random()*(max-min)+min; }
 
-    function spawnBubble(text, i){ /* enhanced pop-in & safe placement */
+    function spawnBubble(text, i){
       const wrap = document.createElement('div');
       wrap.className = 'bubble';
       wrap.style.zIndex = (z + i).toString();
 
-      // 统一浅色背景
       const c1 = pastel(); const c2 = pastel();
       wrap.style.background = Math.random() < 0.55 ? c1 : `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`;
 
-      // 先放到屏幕外以便测量尺寸
-      wrap.style.left = '-9999px'; wrap.style.top = '-9999px';
-
-      // 头部：爱心图标 + 标题“提示”
+      // 头部
       const header = document.createElement('div'); header.className = 'header';
       const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = pickIcon();
       const title = document.createElement('div'); title.className = 'title'; title.textContent = '提示';
       header.appendChild(icon); header.appendChild(title);
 
-      // 正文：祝福语
+      // 正文
       const body = document.createElement('div'); body.className = 'body';
       const t = document.createElement('div'); t.className = 'txt'; t.textContent = text;
       body.appendChild(t);
@@ -263,8 +261,8 @@
       wrap.appendChild(header); wrap.appendChild(body);
       document.body.appendChild(wrap);
 
-      // —— 确保不会超出屏幕：基于实际像素计算中心点范围 ——
-      const pad = 8; // 边距
+      // 计算不越界位置（以中心定位）
+      const pad = 8;
       const w = wrap.offsetWidth; const h = wrap.offsetHeight;
       const ww = window.innerWidth; const wh = window.innerHeight;
       const minX = pad + w/2, maxX = ww - pad - w/2;
@@ -274,64 +272,187 @@
       wrap.style.left = x + 'px';
       wrap.style.top  = y + 'px';
     }
-      // end pop-in setup
-    }
-  // —— 结尾大卡片 ——
+
+    // —— 结尾大卡片 —— 
     function showFinalCard(){
+      const finalMsgs = [
+        '生日快乐 夏英琪<br/>给最勇敢的小妖精',
+        '记得好好吃饭 记得天天开心',
+        '好好爱自己 你已经很棒了',
+        '不要熬夜 多喝水哦 你超棒的',
+        '要相信自己奥 珍惜每一刻',
+        '别太累了 有时偷懒也好 <br/> 每天都要元气满满',
+        '娃娃脸',
+        '夏英琪所有烦恼都消失 <br/>一定一定要感到幸福',
+        '天冷了 多穿衣服 <br/> 好好爱自己',
+        '夏英琪小恶魔生日快快乐乐<br/>——来自诗人的祝福'
+      ];
+
       const wrap = document.createElement('div');
       wrap.className = 'bubble';
-      wrap.style.zIndex = (99999).toString();
+      wrap.style.zIndex = '99999';
       wrap.style.width = 'min(520px, 86vw)';
       wrap.style.minHeight = 'min(260px, 48vh)';
       wrap.style.left = (window.innerWidth/2) + 'px';
       wrap.style.top  = (window.innerHeight/2) + 'px';
       wrap.style.background = 'linear-gradient(135deg, hsl(340 90% 92%), hsl(330 95% 97%))';
 
+      // 头部
       const header = document.createElement('div'); header.className = 'header';
       const icon = document.createElement('div'); icon.className = 'icon'; icon.textContent = '💖';
       const title = document.createElement('div'); title.className = 'title'; title.textContent = '终极祝福';
       header.appendChild(icon); header.appendChild(title);
 
+      // 正文
       const body = document.createElement('div'); body.className = 'body';
       const t = document.createElement('div'); t.className = 'txt';
       t.style.fontSize = 'clamp(18px, 5.2vw, 26px)';
-      t.innerHTML = '生日快乐 夏英琪<br/>给最勇敢的小妖精';
+      t.style.transition = 'opacity .5s ease';
+      t.style.opacity = '0';
       body.appendChild(t);
 
       wrap.appendChild(header); wrap.appendChild(body);
       document.body.appendChild(wrap);
+
+      // 2 秒一条，渐隐渐现
+      let i = 0;
+      const SHOW_MS = 2000;
+      const FADE_MS = 500;
+
+      function showNext(){
+        if (i >= finalMsgs.length) return; // 最后一条后停住
+        t.style.opacity = '0';             // 渐出
+        setTimeout(()=>{
+          t.innerHTML = finalMsgs[i++];    // 换文案
+          t.style.opacity = '1';           // 渐入
+          setTimeout(()=>{
+            if (i < finalMsgs.length) setTimeout(showNext, 0);
+          }, SHOW_MS - FADE_MS);
+        }, FADE_MS);
+      }
+
+      // 立即显示第一条
+      t.innerHTML = finalMsgs[i++];
+      t.style.opacity = '1';
+      setTimeout(showNext, SHOW_MS);
     }
-  // === 防御性补丁：确保“打开礼物”总能启动 ===
+
+    function finish(){
+      if (finished) return; finished = true;
+      stopTimer();
+      pauseBtn.disabled = true; rateEl.textContent = '已完成';
+      showFinalCard();
+      launchFireworks(20); // ⬅️ 播放 10 秒烟花
+    }
+
+    // --- 庆祝烟花：durationSec 秒后自动停止 ---
+    function launchFireworks(durationSec = 10){
+      // 动态创建独立画布，用完就删
+      const c = document.createElement('canvas');
+      c.style.cssText = 'position:fixed;inset:0;z-index:12000;pointer-events:none';
+      document.body.appendChild(c);
+
+      const ctx = c.getContext('2d');
+      let W, H, DPR = Math.max(1, window.devicePixelRatio || 1);
+      function resize(){
+        W = c.clientWidth = window.innerWidth;
+        H = c.clientHeight = window.innerHeight;
+        c.width  = W * DPR; c.height = H * DPR;
+        ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      const gravity = 0.06;
+      const friction = 0.985;
+      const particles = [];
+      let running = true, rafId = 0;
+
+      function burst(x, y, colors){
+        const n = 48 + Math.floor(Math.random()*16);
+        for(let i=0;i<n;i++){
+          const a = Math.random()*Math.PI*2;
+          const sp = 2 + Math.random()*3.5;
+          particles.push({
+            x, y,
+            vx: Math.cos(a)*sp,
+            vy: Math.sin(a)*sp,
+            life: 1,
+            color: colors[Math.floor(Math.random()*colors.length)],
+            size: 1 + Math.random()*2
+          });
+        }
+      }
+
+      const palettes = [
+        ['#ff7aa2','#ffd1dc','#ffe6a7','#fff5c0'],
+        ['#7adfff','#a7ffeb','#ffffff','#c0d9ff'],
+        ['#ffd27a','#ff9a7a','#ffe07a','#ffffff']
+      ];
+
+      let lastSpawn = 0;
+      function loop(t){
+        if (!running) return;
+        rafId = requestAnimationFrame(loop);
+
+        // 用 destination-out 擦出拖影（不会真正上黑）
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.fillStyle = 'rgba(0,0,0,0.25)';
+        ctx.fillRect(0,0,W,H);
+
+        ctx.globalCompositeOperation = 'lighter';
+
+        // 周期性爆炸
+        if (!lastSpawn || t - lastSpawn > 400){
+          lastSpawn = t;
+          const px = 0.15*W + Math.random()*0.7*W;
+          const py = 0.15*H + Math.random()*0.55*H;
+          burst(px, py, palettes[Math.floor(Math.random()*palettes.length)]);
+        }
+
+        for (let i=particles.length-1;i>=0;i--){
+          const p = particles[i];
+          p.vx *= friction; p.vy = p.vy*friction + gravity;
+          p.x += p.vx; p.y += p.vy;
+          p.life -= 0.012 + Math.random()*0.01;
+
+          if (p.life <= 0 || p.y > H+20){ particles.splice(i,1); continue; }
+          ctx.globalAlpha = Math.max(0, p.life);
+          ctx.fillStyle = p.color;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      rafId = requestAnimationFrame(loop);
+
+      // 到时停止并彻底清理
+      setTimeout(()=>{
+        running = false;
+        cancelAnimationFrame(rafId);
+        window.removeEventListener('resize', resize);
+        // 复位合成模式，清空画布，然后从 DOM 移除
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.clearRect(0,0,W,H);
+        c.remove();  // 🔥 关键：删除画布 → 背景不受影响
+      }, durationSec * 1000);
+    }
+
+    // 兜底：任意点击也能启动一次
     (function(){
       const btn = document.getElementById('startBtn');
       if(!btn) return;
-      let __started = false;
-      function safeStart(){
-        if(__started) return; __started = true;
-        try{ start.style.display = 'none'; hud.style.display = 'flex'; }catch(e){}
-        try{ idx = 0; spawned = 0; z = 1000; playing = true; finished = false; updateHud(); }catch(e){}
-        try{ burst(); startTimer(); }catch(e){}
-        // 异步启动 BGM：即使失败也不影响
-        if (AUDIO_SRC){
-          try{
-            if (!audioEl){ audioEl = new Audio(AUDIO_SRC); audioEl.loop = true; audioEl.preload = 'auto'; }
-            const seek = ()=>{ try{ if (audioEl.readyState>0){ audioEl.currentTime = AUDIO_START_AT||0; audioEl.play().catch(()=>{}); audioEl.removeEventListener('loadedmetadata', seek); audioEl.removeEventListener('canplay', seek);} }catch(e){} };
-            audioEl.addEventListener('loadedmetadata', seek);
-            audioEl.addEventListener('canplay', seek);
-            audioEl.play().then(()=>{ if ((AUDIO_START_AT||0) && audioEl.currentTime < (AUDIO_START_AT-0.5)) audioEl.currentTime = AUDIO_START_AT; }).catch(()=>{});
-          }catch(e){}
-        }
-      }
-      // 追加一次性监听（不依赖原有监听），防止音频异常阻塞
-      btn.addEventListener('click', safeStart, { once:true });
-    })();
-  // 额外兜底启动（防止任何原因导致按钮监听失效）
-    (function(){
       let started = false;
-      function tryStart(){ if (started) return; started = true; const btn = document.getElementById('startBtn'); if (btn) btn.click(); }
-      document.addEventListener('touchstart', tryStart, { once:true, passive:true });
-      document.addEventListener('click', tryStart, { once:true });
+      function safeStart(){
+        if(started) return; started = true;
+        btn.click();
+      }
+      document.addEventListener('touchstart', safeStart, { once:true, passive:true });
+      document.addEventListener('click', safeStart, { once:true });
     })();
   </script>
+  <canvas id="fx"></canvas>
+
 </body>
 </html>
